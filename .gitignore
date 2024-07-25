@@ -4,6 +4,10 @@ __pycache__/
 .idea
 venv/
 
+opencxr_env/
+tests/resources/
+
+
 # Distribution / packaging
 .Python
 env/

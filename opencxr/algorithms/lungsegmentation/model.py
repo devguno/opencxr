@@ -5,11 +5,9 @@ Created on Fri July  2 2021
 @author: ecem
 """
 
-
-import keras
 import numpy as np
 import tensorflow as tf
-from keras.layers import (
+from tensorflow.keras.layers import (
     Input,
     Conv2D,
     MaxPooling2D,
@@ -19,13 +17,7 @@ from keras.layers import (
     UpSampling2D,
     BatchNormalization,
 )
-from keras.models import Model
-
-"""=================================================================================================
-Model architecture for lung segmentation network
-With the dropout settings you can specify the depth (-1 is the deepest layer) and the probability.
-==================================================================================================="""
-
+from tensorflow.keras.models import Model
 
 def unet(
     x_in,
@@ -67,16 +59,11 @@ def unet(
         "upsampling": upsampling,  # if true upsampling, else conv2dtranspose.
     }
 
-    # K.clear_session()
-    # x_in: input layer, data format: (batch, height, width, channels)
     data = Input(shape=x_in)  # input layer
     layers = {}  # hold all the layers in a dictionary.
     l = data  # input dimension.
 
     def conv(filters):
-        """
-        Return convolutional layer given setting arguments.
-        """
         return Conv2D(
             filters=filters,
             kernel_size=settings["kernel_size"],
@@ -86,38 +73,21 @@ def unet(
         )
 
     def dropout(rate):
-        """
-        Return dropout layer given rate.
-        """
         return Dropout(rate)
 
     def batchnorm():
-        """
-        Return batchnormalization layer.
-        """
         return BatchNormalization()
 
     def pool():
-        """
-        Return pooling layer given setting argument.
-        """
         return MaxPooling2D(pool_size=settings["pool_size"])
 
     def concat():
-        """
-        Return Concatenate function.
-        """
         return Concatenate()
 
-    # transpose convolutional filter.
     def t_conv(filters):
-
         if upsampling:
-            # print('upsampling through neareset neighbor')
             return UpSampling2D(size=settings["pool_size"])
-
         else:
-            # print('upsampling with conv2d learning transpose filter')
             return Conv2DTranspose(
                 filters=filters,
                 kernel_size=settings["pool_size"],
@@ -126,31 +96,21 @@ def unet(
                 padding=settings["padding"],
             )
 
-    # add a new layer to the existing architecture.
     def add(layer, l_in, name):
-        """
-        Add a new layer to the dictionary given name.
-        """
         layers[name] = layer(l_in)
         return layers[name]
 
-    depths = list(range(settings["depth"]))  # [0,1,2,3]
+    depths = list(range(settings["depth"]))
 
     if settings["dropout"] != False:
-        dropout_depths = list(range(settings["depth"] + 1))  # [1,2,3,4]
-        dropouts = {
-            dropout_depths[d]: rate for d, rate in settings["dropout"]
-        }  # apply to the last layer with 0.5 rate..
+        dropout_depths = list(range(settings["depth"] + 1))
+        dropouts = {dropout_depths[d]: rate for d, rate in settings["dropout"]}
 
     contracting_outputs = {}
-    # contracting.
     for i in depths:
         for j in range(settings["n_convs_per_layer"]):
-            # number of filters.
             n = int(settings["filters"] * (2 ** i))
-            # create the layer given previous , add it to dictionary of layers.
             l = add(conv(n), l, "conv_down_{}_{}".format(i, j))
-
             contracting_outputs[i] = l
 
             if settings["batch_norm"] == True:
@@ -164,18 +124,15 @@ def unet(
 
         l = add(pool(), l, "pool_{}".format(i))
 
-    # bottom
     i = settings["depth"]
     for j in range(settings["n_convs_per_layer"]):
         n = int(settings["filters"] * 2 ** settings["depth"])
         l = add(conv(n), l, "conv_{}_{}".format(settings["depth"], j))
-        # print('layer shape', l.shape)
 
         if settings["dropout"] != False:
             if i in dropouts:
                 l = add(dropout(dropouts[i]), l, "dropout_{}_{}".format(i, j))
 
-    # expanding
     for i in reversed(depths):
         n = int(settings["filters"] * 2 ** i)
         l = add(t_conv(n), l, "t_conv{}".format(i))
@@ -190,21 +147,19 @@ def unet(
 
     lr = float(lr)
     if lr != "default":
-
         if optimizer == "adam":
-            optimizer = keras.optimizers.Adam(learning_rate=lr)
+            optimizer = tf.keras.optimizers.Adam(learning_rate=lr)
         elif optimizer == "RMSprop":
-            optimizer = tf.keras.optimizers.legacy.RMSprop(learning_rate=lr, decay=1e-3)
+            optimizer = tf.keras.optimizers.RMSprop(learning_rate=lr, decay=1e-3)
         elif optimizer == "adagrad":
-            optimizer = keras.optimizers.Adagrad(learning_rate=lr)
+            optimizer = tf.keras.optimizers.Adagrad(learning_rate=lr)
         elif optimizer == "sgd":
-            optimizer = keras.optimizers.legacy.SGD(
+            optimizer = tf.keras.optimizers.SGD(
                 learning_rate=lr, decay=1e-6, momentum=0.9, nesterov=True
             )
-
-    else:  # use default values for the optimizers.
+    else:
         if optimizer == "sgd":
-            optimizer = keras.optimizers.legacy.SGD(
+            optimizer = tf.keras.optimizers.SGD(
                 learning_rate=0.01, decay=1e-6, momentum=0.9, nesterov=True
             )
 
@@ -215,8 +170,7 @@ def unet(
         model.compile(
             optimizer=optimizer, loss="binary_crossentropy", metrics=["accuracy"]
         )
-
-    else:  # if not binary classification
+    else:
         out = Conv2D(filters=2, kernel_size=(1, 1), activation="softmax")
         l = add(out, l, "out")
         model = Model(data, l)
@@ -224,4 +178,4 @@ def unet(
             optimizer=optimizer, loss="categorical_crossentropy", metrics=["accuracy"]
         )
 
-    return model  # l, layers
+    return model
